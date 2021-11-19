@@ -1,0 +1,25 @@
+CC = g++
+AR = ar
+OPT = -g -ggdb -mbmi -mbmi2 -O2
+
+CFLAGS += --std=c++11 -fno-strict-aliasing -Wall -c -I. -I./include -I/Library/Developer/CommandLineTools/usr/lib/clang/12.0.0/include/ -I/Library/Developer/CommandLineTools/usr/include/ -I/Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/
+
+LDFLAGS+= -Wall -lpthread -lpcap --std=c++11
+
+parta:
+	$(CC) parta_checkpoints.cpp basic.cpp device.cpp packetio.cpp ${LDFLAGS} -o $@
+
+arp:
+	$(CC) test_arp.cpp basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp ${LDFLAGS} -o $@
+
+route:
+	$(CC) test_route.cpp basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp ${LDFLAGS} -o $@
+
+listen:
+	$(CC) listen.cpp basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp ${LDFLAGS} -o $@
+
+prefix:
+	$(CC) test_longest_prefix.cpp basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp ${LDFLAGS} -o $@
+
+clean:
+	rm -rf parta arp listen route prefix
