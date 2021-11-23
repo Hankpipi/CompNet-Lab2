@@ -86,6 +86,8 @@
         "stack": "cpp",
         "typeindex": "cpp",
         "unordered_set": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "unp.h": "c",
+        "zconf.h": "c"
     }
 }

@@ -1,28 +1,27 @@
 #include "packetio.h"
 
-struct DevicePool pool;
 
 // check if all the devices are able to activare
 bool device_activate_test() {
     char* errbuf = NULL;
     pcap_if_t * pcap_it;
     if(pcap_findalldevs(&pcap_it, errbuf) < 0) {
-        printf("findalldevs error: %s", errbuf);
+        my_printf("findalldevs error: %s", errbuf);
         return 0;
     }
     for (pcap_if_t* it = pcap_it; it; it = it ->next) {
         pcap_t* _pcap = pcap_create(it -> name, errbuf); 
         u_char * mac = GetMACAddr(it -> name);
         if(_pcap == NULL) {
-            printf("pcap create error %s\n", errbuf);
+            my_printf("pcap create error %s\n", errbuf);
             continue;
         }
         int err = pcap_activate(_pcap);
         if(err != 0) {
-            printf("pcap_activate error\n");
+            my_printf("pcap_activate error\n");
             continue;
         }
-        printf("%s activate successfully, mac address is %s\n", it->name, mac);
+        my_printf("%s activate successfully, mac address is %s\n", it->name, mac);
     }
     pcap_freealldevs(pcap_it);
     return 1;
@@ -37,7 +36,7 @@ bool device_test() {
         // dev -> printDeviceInfo();
         int id = pool.findDevice(dev->name);
         if(dev->id != id) {
-            printf("findDevice %s error\n", dev->name);
+            my_printf("findDevice %s error\n", dev->name);
             return 0;
         }
     }
@@ -61,15 +60,15 @@ bool send_receive_test() {
 int main() {
     pool.setFrameReceiveCallback(myFrameReceivedCallback);
     if(!device_activate_test()) {
-        printf("device_activate_test failed!\n");
+        my_printf("device_activate_test failed!\n");
         return 0;
     }
     if(!device_test()) {
-        printf("device_activate_test failed!\n");
+        my_printf("device_activate_test failed!\n");
         return 0;
     }
     if(!send_receive_test()) {
-        printf("send_receive_test failed!\n");
+        my_printf("send_receive_test failed!\n");
     }
     return 0;
 }

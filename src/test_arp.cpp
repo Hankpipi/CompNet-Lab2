@@ -6,7 +6,7 @@ int main() {
     char* errbuf = NULL;
     pcap_if_t * pcap_it;
     if(pcap_findalldevs(&pcap_it, errbuf) < 0) {
-        printf("findalldevs error: %s", errbuf);
+        my_printf("findalldevs error: %s", errbuf);
         return 0;
     }
     //pool define in ip.cpp

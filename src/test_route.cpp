@@ -6,7 +6,7 @@ int main() {
     char* errbuf = NULL;
     pcap_if_t * pcap_it;
     if(pcap_findalldevs(&pcap_it, errbuf) < 0) {
-        printf("findalldevs error: %s", errbuf);
+        my_printf("findalldevs error: %s", errbuf);
         return 0;
     }
     //pool define in device.cpp
@@ -23,7 +23,7 @@ int main() {
     startBroadcast();
 
     sleep(5);
-    printf("[test_route] start SendIPPacket\n");
+    my_printf("[test_route] start SendIPPacket\n");
     in_addr src, dst;
     inet_aton("10.100.1.1", &src);
     inet_aton("10.100.2.2", &dst);

@@ -16,6 +16,6 @@ int main() {
     in_addr ip_prefix;
     inet_aton("10.100.1.1", &ip_prefix);
     u_char* res = router.GetNexthop(ip_prefix);
-    printf("The next hop of [%s] is [%s]\n", IPtoStr(ip_prefix), res);
+    my_printf("The next hop of [%s] is [%s]\n", IPtoStr(ip_prefix), res);
     return 0;
 }

@@ -25,32 +25,31 @@ char* IPtoStr(in_addr IP) {
 
 u_char* GetMACAddr(const char* name) {
     #ifndef __APPLE__
-    struct ifreq ifreq;
-    int sock;
-    char* mac = new char[18];
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("socket");
+    ifaddrs* if_link;
+    if (getifaddrs(&if_link) < 0) {
         return NULL;
     }
-    strcpy(ifreq.ifr_name, name);
-    if (ioctl(sock, SIOCGIFHWADDR, &ifreq) < 0) {
-        perror("ioctl");
-        return NULL;
+    ifaddrs* tmp = if_link;
+    while (tmp) {
+        if (strcmp(tmp->ifa_name, name) == 0 && tmp->ifa_addr->sa_family == AF_PACKET) {
+            sockaddr_ll* tmp_addr = (sockaddr_ll*)(tmp->ifa_addr);
+            u_char* mac_addr= new u_char[18];
+            memcpy(mac_addr, tmp_addr->sll_addr, 6);
+            char* mac = new char[18];
+            sprintf(mac, "%02x:%02x:%02x:%02x:%02x:%02x",
+                mac_addr[0], mac_addr[1], mac_addr[2],
+                mac_addr[3], mac_addr[4], mac_addr[5]);
+            return (u_char*)mac;
+        }
+        tmp = tmp->ifa_next;
     }
-    sprintf(mac, "%02x:%02x:%02x:%02x:%02x:%02x",
-        (u_char)ifreq.ifr_hwaddr.sa_data[0],
-        (u_char)ifreq.ifr_hwaddr.sa_data[1],
-        (u_char)ifreq.ifr_hwaddr.sa_data[2],
-        (u_char)ifreq.ifr_hwaddr.sa_data[3],
-        (u_char)ifreq.ifr_hwaddr.sa_data[4],
-        (u_char)ifreq.ifr_hwaddr.sa_data[5]);
-    return (u_char*)mac;
+    return NULL;
     #else
     char* errbuf = NULL;
     pcap_if_t * pcap_it;
     u_char* ret = NULL;
     if(pcap_findalldevs(&pcap_it, errbuf) < 0) {
-        printf("findalldevs error: %s", errbuf);
+        my_printf("findalldevs error: %s", errbuf);
         return NULL;
     }
     for (; pcap_it; pcap_it = pcap_it ->next) {
@@ -102,13 +101,13 @@ int GetIPInfo(const char* dev_name, in_addr& dev_ip, in_addr& subnetMask) {
             char tmp_ip[30], tmp_mask[30];
             strcpy(tmp_ip, inet_ntoa(dev_ip));
             strcpy(tmp_mask, inet_ntoa(subnetMask));
-            printf("[GetIPInfo] The IP address of %s is %s, subnetMask is %s\n", dev_name, IPtoStr(dev_ip), IPtoStr(subnetMask));
+            my_printf("[GetIPInfo] The IP address of %s is %s, subnetMask is %s\n", dev_name, IPtoStr(dev_ip), IPtoStr(subnetMask));
             break;
         }
         tmp = tmp->ifa_next;
     }
     if (dev_ip.s_addr == 0) {
-        printf("[GetIPInfo] Device %s have no IP\n", dev_name);
+        my_printf("[GetIPInfo] Device %s have no IP\n", dev_name);
         return -1;
     }
     return 0;
@@ -124,4 +123,35 @@ bool cmp_str:: operator()(const u_char *a, const u_char *b) const {
 
 bool IsSameSubnet(in_addr ip1, in_addr ip2, in_addr SubnetMask) {
     return ((ip1.s_addr & SubnetMask.s_addr) == (ip2.s_addr & SubnetMask.s_addr));
+}
+
+void TCPToHost(tcphdr& header) {
+    header.th_dport = ntohs(header.th_dport);
+    header.th_sport = ntohs(header.th_sport);
+    header.th_seq = ntohl(header.th_seq);
+    header.th_ack = ntohl(header.th_ack);
+    header.th_win = ntohl(header.th_win);
+}
+
+void TCPToNet(tcphdr& header) {
+    header.th_dport = htons(header.th_dport);
+    header.th_sport = htons(header.th_sport);
+    header.th_seq = htonl(header.th_seq);
+    header.th_ack = htonl(header.th_ack);
+    header.th_win = htonl(header.th_win);
+}
+ 
+ bool check_SYN(tcphdr& header) {
+    return (header.th_flags & TH_SYN) && (header.th_flags & TH_ACK) == 0;
+}
+
+bool check_SYN_ACK(tcphdr& header) {
+    int SYN_ACK = TH_SYN | TH_ACK;
+    return (header.th_flags & SYN_ACK) == SYN_ACK;
+}
+bool check_ACK(tcphdr& header) {
+    return header.th_flags & TH_ACK;
+}
+bool check_FIN(tcphdr& header) {
+    return header.th_flags & TH_FIN;
 }

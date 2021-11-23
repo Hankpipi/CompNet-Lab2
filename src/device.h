@@ -10,13 +10,14 @@ struct Device {
     int id;
     const char* name;
     const u_char* mac;
-    in_addr dev_ip;
     in_addr subnetMask;
     in_addr ip;
     pcap_t* pcap;
     std::thread t;
     std::thread broadcastRouteTable;
     frameReceiveCallback frameCallback;
+    bool free_port[65536];
+    std::mutex mutex_port;
 
     Device();
     Device(int _id, const char* _name);
@@ -56,6 +57,7 @@ struct DevicePool {
     */
     int findDevice(const char* dev_name);
     Device* findDevice(in_addr src, in_addr dst);
+    Device* findDevice(in_addr src);
     int setFrameReceiveCallback(frameReceiveCallback callback);
     void StartListening();
 };
