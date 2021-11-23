@@ -42,7 +42,7 @@ void pcap_callback(Device* dev, const struct pcap_pkthdr* packet_header, const u
         memcpy(content, packet_content + header_size, size);
         dev->frameCallback(content, size, id);
     }
-    puts("");
+    my_printf("\n");
 }
 
 void Device::printDeviceInfo() {

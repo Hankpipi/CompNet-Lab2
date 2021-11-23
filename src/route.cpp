@@ -36,15 +36,15 @@ void UpdateTalble() {
 }
 
 void Router::printTable() {
-    my_printf("[Print Routing Table]\n");
-    my_printf("\033[34m[Table]\033[0m\n");
-    my_printf("_____________________________________________________________________________________________________\n");
-    my_printf("||%18s||%18s||%18s||%18s||%18s||\n", "ip_prefix", "subnetMask", "send_by", "next_hop", "dist");
+    printf("[Print Routing Table]\n");
+    printf("\033[34m[Table]\033[0m\n");
+    printf("_____________________________________________________________________________________________________\n");
+    printf("||%18s||%18s||%18s||%18s||%18s||\n", "ip_prefix", "subnetMask", "send_by", "next_hop", "dist");
     for (auto& item : routetable) {
-        my_printf("||%18s||%18s||%18s||%18s||%18d||\n", IPtoStr(item.ip_prefix), IPtoStr(item.subnetMask),
+        printf("||%18s||%18s||%18s||%18s||%18d||\n", IPtoStr(item.ip_prefix), IPtoStr(item.subnetMask),
             item.dev->mac, item.next_hop, item.dist);
     }
-    my_printf("=====================================================================================================\n"); 
+    printf("=====================================================================================================\n"); 
 }
 
 void Router::check() {

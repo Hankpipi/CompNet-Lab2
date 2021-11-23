@@ -343,8 +343,11 @@ int __wrap_bind(int socket, const struct sockaddr* address, socklen_t address_le
     dev->free_port[port] = 0;
     dev->mutex_port.unlock();
     bind_manager.bind_list[socket] = SocketInfo();
-    bind_manager.bind_list[socket].addr.sin_addr.s_addr = ip.s_addr;
     bind_manager.bind_list[socket].addr.sin_port = port;
+    if (ip.s_addr == INADDR_ANY)
+        bind_manager.bind_list[socket].addr.sin_addr.s_addr = dev->ip.s_addr;
+    else
+        bind_manager.bind_list[socket].addr.sin_addr.s_addr = ip.s_addr;
     return 0;
 }
 

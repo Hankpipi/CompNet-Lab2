@@ -28,7 +28,7 @@
 #include <map>
 #include <set>
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define my_printf printf
 #else
