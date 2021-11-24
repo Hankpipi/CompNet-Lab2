@@ -59,7 +59,7 @@ void handleSYN(ConnRequest& req, sockaddr_in* addr) {
     header.th_win = 65535;
     TCPToNet(header);
     header.th_sum = 0;
-    header.th_sum = Checksum(&header, 20);
+    header.th_sum = Checksum(&header, sizeof(header));
     sendIPPacket(pool, addr->sin_addr, req.ip, IPPROTO_TCP, &header, sizeof(header));
 }
 
@@ -79,7 +79,7 @@ void handle_SYN_ACK(int socket, IPpacket& pkt, tcphdr& req_header) {
     header.th_win = 65535;
     TCPToNet(header);
     header.th_sum = 0;
-    header.th_sum = Checksum(&header, 20);
+    header.th_sum = Checksum(&header, sizeof(header));
     sendIPPacket(pool, pkt.header.ip_dst, pkt.header.ip_src, IPPROTO_TCP, &header, sizeof(header));
     bind_manager.bind_list.find(socket)->second.pair_addr.sin_addr.s_addr = pkt.header.ip_src.s_addr;
     bind_manager.bind_list.find(socket)->second.pair_addr.sin_port = req_header.th_sport;
@@ -95,7 +95,7 @@ void sendSYN(int socket, sockaddr_in src_addr_in, const sockaddr* dst_addr) {
     header.th_win = 65535;
     TCPToNet(header);
     header.th_sum = 0;
-    header.th_sum = Checksum(&header, 20);
+    header.th_sum = Checksum(&header, sizeof(header));
     sendIPPacket(pool, src_addr_in.sin_addr, ((sockaddr_in*)dst_addr)->sin_addr, IPPROTO_TCP, &header, sizeof(header));
 }
 
@@ -124,6 +124,22 @@ void send_FINACK(int fd) {
     header.th_sport = socket_info.addr.sin_port;
     header.th_dport = socket_info.pair_addr.sin_port;
     header.th_flags = TH_FIN | TH_ACK;
+    header.th_win = 65535;
+    TCPToNet(header);
+    header.th_sum = 0;
+    header.th_sum = Checksum(&header, sizeof(header));
+    sendIPPacket(pool, socket_info.addr.sin_addr, socket_info.pair_addr.sin_addr, IPPROTO_TCP, &header, sizeof(header));
+}
+
+void sendACK(int fd) {
+    SocketInfo socket_info = bind_manager.bind_list.find(fd)->second;
+    tcphdr header;
+    memset(&header, 0, sizeof(header));
+    header.th_seq = socket_info.seq;
+    header.th_ack = socket_info.pair_seq;
+    header.th_sport = socket_info.addr.sin_port;
+    header.th_dport = socket_info.pair_addr.sin_port;
+    header.th_flags = TH_ACK;
     header.th_win = 65535;
     TCPToNet(header);
     header.th_sum = 0;
@@ -258,8 +274,9 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
             cv_estab.notify_all();
             return 0;
         }
-        if ((int)header.th_ack != bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len) {
-            my_printf("[statusForward] ACK Error!\n");
+        if ((int)header.th_ack != bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len + 1) {
+            printf("[statusForward] ACK Error: expect %d, but get %d\n", 
+                    bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len + 1, header.th_ack);
             return -1;
         }
         bind_manager.bind_list.find(socket)->second.seq += bind_manager.bind_list.find(socket)->second.last_len;
@@ -284,8 +301,13 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
         return 0;
     }
     if (status == ESTAB || status == FIN_WAIT_1) {
-        std::unique_lock<std::mutex> lk(read_mutex);
+        if (bind_manager.bind_list.find(socket)->second.pair_seq > (int)header.th_seq) {
+            printf("[statusForward] Error seq: expected seq=%d, but get seq=%d\n", bind_manager.bind_list.find(socket)->second.pair_seq, header.th_seq);
+            return -1;
+        }
         size_t ip_header_len = sizeof(ip);
+        bind_manager.bind_list.find(socket)->second.pair_seq += len - (int)ip_header_len + 1;
+        std::unique_lock<std::mutex> lk(read_mutex);
         u_char* content = (u_char*)pkt.payload + ip_header_len;
         auto& socket_info = bind_manager.bind_list.find(socket)->second;
         for (int i = 0; i < len - (int)ip_header_len; ++i) {
@@ -293,6 +315,7 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
         }
         lk.unlock();
         cv_read.notify_all();
+        sendACK(socket);
         return 0;
     }
     return -1;

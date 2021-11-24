@@ -152,7 +152,7 @@ int sendWrite(int, size_t, const void*);
 
 void sendFIN(int);
 void send_FINACK(int);
-void send_ACK(int);
+void sendACK(int);
 
 void freeSocket(int);
 

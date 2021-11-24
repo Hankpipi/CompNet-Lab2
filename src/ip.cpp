@@ -77,11 +77,12 @@ int myIPCallback(const void* buf, const int len) {
         my_printf("\n");
         if (IsArrive(pkt.header.ip_dst)) {
             my_printf("[IPCallback] Successfully receive IPpacket to me!\n");
-            TCP_handler(pkt, len - header_len);
+            if (pkt.header.ip_p == IPPROTO_TCP) 
+                TCP_handler(pkt, len - header_len);
             
         } else {
             my_printf("[IPCallback] [Forwarding]\n");
-            sendIPPacket(pool, pkt.header.ip_src, pkt.header.ip_dst, IPPROTO_UDP, pkt.payload, len - header_len);
+            sendIPPacket(pool, pkt.header.ip_src, pkt.header.ip_dst, pkt.header.ip_p, pkt.payload, len - header_len);
         }
     } catch (const char* err) {
         my_printf("[IPCallback] error: %s", err);
