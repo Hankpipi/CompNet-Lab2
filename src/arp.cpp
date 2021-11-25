@@ -30,14 +30,14 @@ void arpPacket::RecoverOrder() {
 
 char* ARPFindMAC(Device* dev, in_addr target_ip) {
     if (arp_map.find(target_ip) != arp_map.end()) {
-        my_printf("[ARPFindMAC] [targetIP: %s] is in arp_map [MAC: %s]\n", IPtoStr(target_ip), arp_map.at(target_ip));
+        IP_printf("[ARPFindMAC] [targetIP: %s] is in arp_map [MAC: %s]\n", IPtoStr(target_ip), arp_map.at(target_ip));
         return arp_map.at(target_ip);
     }
-    my_printf("[ARPFindMAC] [sendARPRequest] [targetIP: %s] [device_name: %s]\n", IPtoStr(target_ip), dev->name);
+    IP_printf("[ARPFindMAC] [sendARPRequest] [targetIP: %s] [device_name: %s]\n", IPtoStr(target_ip), dev->name);
     sendARPRequest(dev, target_ip);
     double total_wait_time = 0;
     int retry = 0;
-    my_printf("[ARPFindMAC] start arp looping\n");
+    IP_printf("[ARPFindMAC] start arp looping\n");
     while (1) {
         usleep(250000);
         total_wait_time += 0.25;
@@ -53,7 +53,7 @@ char* ARPFindMAC(Device* dev, in_addr target_ip) {
             if (retry > MAX_ARP_RESEND)
                 throw "findARP failed! Please check your IP and network connection";
 
-            my_printf("[ARPFindMAC] [Resend ARPRequest] [Retry = %d] [targetIP: %s] [device_name: %s]\n",
+            IP_printf("[ARPFindMAC] [Resend ARPRequest] [Retry = %d] [targetIP: %s] [device_name: %s]\n",
                     retry, IPtoStr(target_ip), dev->name);
             sendARPRequest(dev, target_ip);
         }
@@ -72,7 +72,7 @@ void sendARPRequest(Device* dev, in_addr target_ip) {
 }
 
 void handleARPRequest(Device* dev, arpPacket& pkt) {
-    my_printf("[handleARPRequest]: ...\n");
+    IP_printf("[handleARPRequest]: ...\n");
     if (pkt.dstIP.s_addr != dev->ip.s_addr)
         return;
     arpPacket reply;
@@ -84,14 +84,14 @@ void handleARPRequest(Device* dev, arpPacket& pkt) {
     memcpy(reply.srcMac, mac, sizeof(mac));
     memcpy(reply.dstMac, pkt.srcMac, sizeof(pkt.srcMac));
     reply.ToNetOrder();
-    my_printf("[handleARPRequest] [srcIP=%s] [dstIP=%s]\n", IPtoStr(reply.srcIP), IPtoStr(reply.dstIP));
+    IP_printf("[handleARPRequest] [srcIP=%s] [dstIP=%s]\n", IPtoStr(reply.srcIP), IPtoStr(reply.dstIP));
     dev->sendFrame(&reply, sizeof(reply), ETHERTYPE_ARP, MacToStr(pkt.srcMac));
 }
 
 void handleARPReply(const void* buf, int len, char* targetMAC) {
     arpPacket pkt(buf);
     in_addr targetIP = pkt.srcIP;
-    my_printf("[handleARPReply] arp_map[%s] = %s\n", IPtoStr(targetIP), targetMAC);
+    IP_printf("[handleARPReply] arp_map[%s] = %s\n", IPtoStr(targetIP), targetMAC);
     condition_mutex.lock();
     arp_map[targetIP] = targetMAC;
     condition_mutex.unlock();

@@ -3,10 +3,10 @@
 
 int Device::sendFrame(const void* buf, int len, int ethtype, const void* destmac) const {
     if(len < 0) {
-        my_printf("error: buf length should >=0\n");
+        LK_printf("error: buf length should >=0\n");
         return -1;
     }
-    my_printf("[sendFrame] start sending frame from %s to %s\n", this->mac, (char*)destmac);
+    LK_printf("[sendFrame] start sending frame from %s to %s\n", this->mac, (char*)destmac);
     size_t header_size = 2 * ETHER_ADDR_LEN + ETHER_TYPE_LEN;
     size_t size = len + header_size;
     u_char* pkt = new u_char[size];
@@ -21,7 +21,7 @@ int Device::sendFrame(const void* buf, int len, int ethtype, const void* destmac
     }
     header->ether_type = htons(ethtype);
     if (sizeof(*header) != header_size) {
-        my_printf("[sendFrame] header message error\n");
+        LK_printf("[sendFrame] header message error\n");
         return -1;
     }
     memcpy(pkt, header, header_size);
@@ -29,20 +29,21 @@ int Device::sendFrame(const void* buf, int len, int ethtype, const void* destmac
 
     int err = pcap_sendpacket(this->pcap, (u_char*)pkt, size);
     if (err < 0) {
-        my_printf("[sendFrame] pcap_sendpacket error\n");
+        char* err = pcap_geterr(this->pcap);
+        printf("[sendFrame] pcap_sendpacket error %s\n", err);
         return -1;
     }
-    my_printf("[sendFrame] send frame succeeded! frame size is %d\n", (int)size);
+    LK_printf("[sendFrame] send frame succeeded! frame size is %d\n", (int)size);
     return 0;
 }
 
 int myFrameReceivedCallback(const void* buf, int len, int id) {
-    my_printf("[FrameReceivedCallback] of deivce%d:\n", id);
+    LK_printf("[FrameReceivedCallback] of deivce%d:\n", id);
     int lim = std::min(len, 15);
-    my_printf("buf len = %d, the first %d bytes: \n", len, lim);
+    LK_printf("buf len = %d, the first %d bytes: \n", len, lim);
     for (int i = 0; i < lim; ++i)
-        my_printf("%0X ", *(u_int8_t*)((u_char*)buf + i));
-    my_printf("\n");
+        LK_printf("%0X ", *(u_int8_t*)((u_char*)buf + i));
+    LK_printf("\n");
     IPCallback(buf, len);
     return 0;
 }
@@ -51,7 +52,7 @@ int DevicePool::setFrameReceiveCallback(frameReceiveCallback callback) {
     try {
         this->frameCallback = callback;
     } catch (const char* err) {
-        my_printf("setFrameReceiveCallback error: %s \n", err);
+        LK_printf("setFrameReceiveCallback error: %s \n", err);
         return -1;
     }
     return 0;

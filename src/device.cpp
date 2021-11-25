@@ -6,9 +6,9 @@ struct DevicePool pool;
 
 void pcap_callback(Device* dev, const struct pcap_pkthdr* packet_header, const u_char* packet_content) {
     int id = dev->id;
-    my_printf("[pcap_callback]: device id = %d receive [Caplen: %d] [Len: %d] packet\n", id, packet_header->caplen, packet_header->len);
+    LK_printf("[pcap_callback]: device id = %d receive [Caplen: %d] [Len: %d] packet\n", id, packet_header->caplen, packet_header->len);
     if (packet_header->caplen != packet_header->len) {
-        my_printf("pcap_callback: data is not complete!\n\n");
+        LK_printf("pcap_callback: data is not complete!\n\n");
         return;
     }
     size_t header_size = 2 * ETHER_ADDR_LEN + ETHER_TYPE_LEN;
@@ -19,10 +19,10 @@ void pcap_callback(Device* dev, const struct pcap_pkthdr* packet_header, const u
     u_char* dst = MacToStr(header->ether_dhost);
     u_char* src = MacToStr(header->ether_shost);
     header->ether_type = ntohs(header->ether_type);
-    my_printf("[pcap_callback][device's mac address = %s][frame's destmac = %s][frame's srcmac = %s][ether_type = %d]\n", 
+    LK_printf("[pcap_callback][device's mac address = %s][frame's destmac = %s][frame's srcmac = %s][ether_type = %d]\n", 
             dev->mac, dst, src, header->ether_type);
     if (strcmp((char*)dst, (char*)dev->mac) != 0 && strcmp((char*)dst, "ff:ff:ff:ff:ff:ff") != 0) {
-        my_printf("drop useless packet: frame's destmac address doesn't match\n\n");
+        LK_printf("drop useless packet: frame's destmac address doesn't match\n\n");
         return;
     }
     if (header->ether_type == ETHERTYPE_ARP) {
@@ -32,7 +32,7 @@ void pcap_callback(Device* dev, const struct pcap_pkthdr* packet_header, const u
         else if (pkt.header.ar_op == ARPOP_REPLY)
             handleARPReply(packet_content + header_size, size, (char*)src);
         else {
-            my_printf("[pcap_callback][Unsupported arp op type]\n");
+            LK_printf("[pcap_callback][Unsupported arp op type]\n");
             return;
         }
     } else if (header->ether_type == ROUTE_PROTO) {
@@ -42,18 +42,18 @@ void pcap_callback(Device* dev, const struct pcap_pkthdr* packet_header, const u
         memcpy(content, packet_content + header_size, size);
         dev->frameCallback(content, size, id);
     }
-    my_printf("\n");
+    LK_printf("\n");
 }
 
 void Device::printDeviceInfo() {
-    my_printf("[printDeviceInfo] id = %d name = %s, mac = %s\n", id, name, mac);
+    LK_printf("[printDeviceInfo] id = %d name = %s, mac = %s\n", id, name, mac);
 }
 
 void device_loop(Device* dev) {
     int err;
     struct pcap_pkthdr* header = NULL;
     u_char* pkt_data = NULL;
-    my_printf("[device_loop] %s receiving thread start listening ......\n", dev->name);
+    LK_printf("[device_loop] %s receiving thread start listening ......\n", dev->name);
     while ((err = pcap_next_ex(dev->pcap, &header, (const u_char**)&pkt_data)) >= 0) {
         if(err == 0)continue;
         pcap_callback(dev, header, pkt_data);
@@ -66,18 +66,18 @@ Device::Device(int _id, const char* _name) {
     char* errbuf = NULL;
     pcap_t* _pcap = pcap_create(_name, errbuf); 
     if(_pcap == NULL) {
-        my_printf("pcap create error %s\n", errbuf);
+        LK_printf("pcap create error %s\n", errbuf);
         throw "pcap_create failed!";
         return ;
     }
     // if((pcap_set_buffer_size(_pcap, 100)) != 0) {
-    //     my_printf("ERROR\n");
+    //     LK_printf("ERROR\n");
     //     throw "pcap_set_buffer_size failed!";
     //     return ;
     //}
     if(pcap_activate(_pcap) != 0) {
         errbuf = pcap_geterr(_pcap);
-        my_printf("pcap_activate error: %s\n", errbuf);
+        LK_printf("pcap_activate error: %s\n", errbuf);
         throw "pcap_activate failed!";
         return ;
     }
@@ -111,10 +111,10 @@ int DevicePool::addDevice(const char* dev_name) {
         Device* new_dev = new Device(device_list.size(), dev_name);
         new_dev->frameCallback = this->frameCallback;
         device_list.push_back(new_dev);
-        my_printf("[addDevice] successfully add [%s] to device pool, [id=%d] [MAC=%s]\n", dev_name, new_dev->id, new_dev->mac);
+        LK_printf("[addDevice] successfully add [%s] to device pool, [id=%d] [MAC=%s]\n", dev_name, new_dev->id, new_dev->mac);
         return new_dev->id;
     } catch (const char* err) {
-        my_printf("[addDevice] %s error: %s\n", dev_name, err);
+        LK_printf("[addDevice] %s error: %s\n", dev_name, err);
         return -1;
     }
 }
@@ -132,7 +132,7 @@ int DevicePool::findDevice(const char* dev_name) {
             return dev->id;
         }
     }
-    my_printf("Device not found device_list! \n");
+    LK_printf("Device not found device_list! \n");
     return -1;
 }
 

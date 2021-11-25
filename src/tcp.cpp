@@ -16,7 +16,7 @@ TCPInitailizer::TCPInitailizer() {
     char* errbuf = NULL;
     pcap_if_t * pcap_it;
     if(pcap_findalldevs(&pcap_it, errbuf) < 0) {
-        my_printf("findalldevs error: %s", errbuf);
+        printf("findalldevs error: %s", errbuf);
         return ;
     }
     //pool define in device.cpp
@@ -37,7 +37,7 @@ struct TCPInitailizer TCPinitailizer;
 int update_status(int socket, int status) {
     status_mutex.lock();
     if (socket_status.find(socket) == socket_status.end()) {
-        my_printf("[CHANGE_STATUS] Socket not existed!\n");
+        printf("[CHANGE_STATUS] Socket not existed!\n");
         status_mutex.unlock();
         return -1;
     }
@@ -65,7 +65,7 @@ void handleSYN(ConnRequest& req, sockaddr_in* addr) {
 
 void handle_SYN_ACK(int socket, IPpacket& pkt, tcphdr& req_header) {
     if (socket_status.find(socket)->second != SYN_SENT) {
-        my_printf("[handle SYN_ACK recv INFO]\033[0m My status is not SYN_SENT and recv a SYN/ACK, it will be ignored!\n");
+        my_printf("[handle_SYN_ACK] Error: drop SYN/ACK packet\n");
         return ;
     }
     update_status(socket, ESTAB);
@@ -73,6 +73,7 @@ void handle_SYN_ACK(int socket, IPpacket& pkt, tcphdr& req_header) {
     memset(&header, 0, sizeof(header));
     header.th_seq = req_header.th_ack;
     header.th_ack = req_header.th_seq + 1;
+    bind_manager.bind_list.find(socket)->second.pair_seq = header.th_ack;
     header.th_dport = req_header.th_sport;
     header.th_sport = req_header.th_dport;
     header.th_flags = TH_ACK;
@@ -105,6 +106,7 @@ void sendFIN(int socket) {
     memset(&header, 0, sizeof(header));
     header.th_seq = socket_info.seq;
     header.th_ack = socket_info.pair_seq;
+    my_printf("[sendFIN] seq=%d\n",header.th_seq);
     header.th_sport = socket_info.addr.sin_port;
     header.th_dport = socket_info.pair_addr.sin_port;
     header.th_flags = TH_FIN;
@@ -121,6 +123,7 @@ void send_FINACK(int fd) {
     memset(&header, 0, sizeof(header));
     header.th_seq = socket_info.seq;
     header.th_ack = socket_info.pair_seq;
+    my_printf("[send_FINACK] ack=%d\n", header.th_ack);
     header.th_sport = socket_info.addr.sin_port;
     header.th_dport = socket_info.pair_addr.sin_port;
     header.th_flags = TH_FIN | TH_ACK;
@@ -141,6 +144,7 @@ void sendACK(int fd) {
     header.th_dport = socket_info.pair_addr.sin_port;
     header.th_flags = TH_ACK;
     header.th_win = 65535;
+    my_printf("[sendACK] send ack=%d\n", header.th_ack);
     TCPToNet(header);
     header.th_sum = 0;
     header.th_sum = Checksum(&header, sizeof(header));
@@ -159,6 +163,7 @@ int sendWrite(int fildes, size_t nbyte, const void* buf) {
     header.th_sport = socket_info.addr.sin_port;
     header.th_dport = socket_info.pair_addr.sin_port;
     header.th_win = 65535;
+    my_printf("[sendWrite] send seq=%d last_len=%d nbyte=%d\n", header.th_seq, socket_info.last_len, (int)nbyte);
     TCPToNet(header);
     header.th_sum = 0;
     header.th_sum = Checksum(&header, header_len);
@@ -168,13 +173,11 @@ int sendWrite(int fildes, size_t nbyte, const void* buf) {
     return 0;
 }
 
-void freeSocket(int socket) {
-    bind_manager.bind_list.erase(bind_manager.bind_list.find(socket));    
-
+void freeSocket(int socket) {   
     listen_maganer.mutex.lock();
-    for (auto iter = listen_maganer.listen_items.begin(); iter != listen_maganer.listen_items.end(); ++iter) {
-        if (iter->socket == socket) {
-            listen_maganer.listen_items.erase(iter);
+    for (auto item = listen_maganer.listen_items.begin(); item != listen_maganer.listen_items.end(); ++item) {
+        if (item->socket == socket) {
+            listen_maganer.listen_items.erase(item);
             break;
         }
     }
@@ -184,6 +187,7 @@ void freeSocket(int socket) {
     in_port_t port = bind_manager.bind_list.find(socket)->second.addr.sin_port;
     in_addr ip = bind_manager.bind_list.find(socket)->second.addr.sin_addr;
 
+    bind_manager.bind_list.erase(bind_manager.bind_list.find(socket)); 
     Device* dev = pool.findDevice(ip);
     dev->mutex_port.lock();
     dev->free_port[port] = 1;
@@ -197,7 +201,7 @@ void freeSocket(int socket) {
 int TCP_handler(IPpacket& pkt, int len) {
     tcphdr header = *(tcphdr*)(pkt.payload);
     if (Checksum(&header, sizeof(header)) != 0) {
-        my_printf("[TCP Handler] Checksum error\n");
+        printf("[TCP Handler] Checksum error\n");
         return -1;
     }
     my_printf("[TCP Handler] Checksum success\n");
@@ -237,11 +241,11 @@ int TCP_handler(IPpacket& pkt, int len) {
             }
         }
         listen_maganer.mutex.unlock();
-        my_printf("[TCP Handler] Drop SYN packet: target ip is not listening\n");
+        printf("[TCP Handler] Drop SYN packet: target ip is not listening\n");
         return -1;
     }
     if(socket < 0) {
-        my_printf("[TCP Handler] Error: socket not find!\n");
+        printf("[TCP Handler] Error: socket not find!\n");
         return -1;
     }
     statusForward(socket, pkt, len, header);
@@ -259,11 +263,13 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
     }
     if (check_ACK(header)) {
         if (check_FIN(header)) {
-            if (status == CLOSING) {
-                status = TIME_WAIT;
-            } else if (status == FIN_WAIT_1)
-                status = FIN_WAIT_2;
-            cv_close.notify_all();
+            my_printf("[statusForward] receive FIN/ACK ack=%d\n", header.th_ack);
+            if (status == CLOSE_WAIT) {
+                socket_status[socket] = CLOSED;
+            } else if (status == FIN_WAIT_1) {
+                socket_status[socket] = FIN_WAIT_2;
+                cv_close.notify_all();
+            }
             return 0;
         }
         if (status == SYN_RCVD) {
@@ -274,39 +280,42 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
             cv_estab.notify_all();
             return 0;
         }
-        if ((int)header.th_ack != bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len + 1) {
-            printf("[statusForward] ACK Error: expect %d, but get %d\n", 
-                    bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len + 1, header.th_ack);
+        if ((int)header.th_ack != bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len) {
+            my_printf("[statusForward] ACK Error: expect %d, but get %d\n", 
+                    bind_manager.bind_list.find(socket)->second.seq + bind_manager.bind_list.find(socket)->second.last_len, header.th_ack);
             return -1;
         }
-        bind_manager.bind_list.find(socket)->second.seq += bind_manager.bind_list.find(socket)->second.last_len;
+        my_printf("[statusForward] ACK success: ack=%d\n", header.th_ack);
+        bind_manager.bind_list.find(socket)->second.last_len = 0;
+        bind_manager.bind_list.find(socket)->second.seq = (int)header.th_ack;
+        bind_manager.bind_list.find(socket)->second.waiting_ack = 0;
         lk.unlock();
         cv_estab.notify_all();
         return 0;
 
     } 
     if (check_FIN(header)) {
+        my_printf("[statusForward] receive FIN seq=%d\n", header.th_seq);
         bind_manager.bind_list.find(socket)->second.pair_seq += 1;
         send_FINACK(socket);
         if (status == ESTAB) {
-            status = CLOSE_WAIT;
+            socket_status[socket] = CLOSE_WAIT;
         } else if (status == FIN_WAIT_2) {
-            status = TIME_WAIT;
+            socket_status[socket] = TIME_WAIT;
             lk.unlock();
-            cv_close.notify_all();
-        } else if (status == FIN_WAIT_1) {
-            status = CLOSING;
             cv_close.notify_all();
         }
         return 0;
     }
-    if (status == ESTAB || status == FIN_WAIT_1) {
+    if (status == ESTAB || status == FIN_WAIT_1 || status == FIN_WAIT_2) {
         if (bind_manager.bind_list.find(socket)->second.pair_seq > (int)header.th_seq) {
-            printf("[statusForward] Error seq: expected seq=%d, but get seq=%d\n", bind_manager.bind_list.find(socket)->second.pair_seq, header.th_seq);
+            my_printf("[statusForward] Error seq: expected seq=%d, but get seq=%d\n", 
+                    bind_manager.bind_list.find(socket)->second.pair_seq, header.th_seq);
             return -1;
         }
+        my_printf("[statusForward] Receive successfully seq=%d\n", header.th_seq);
         size_t ip_header_len = sizeof(ip);
-        bind_manager.bind_list.find(socket)->second.pair_seq += len - (int)ip_header_len + 1;
+        bind_manager.bind_list.find(socket)->second.pair_seq += len - (int)ip_header_len;
         std::unique_lock<std::mutex> lk(read_mutex);
         u_char* content = (u_char*)pkt.payload + ip_header_len;
         auto& socket_info = bind_manager.bind_list.find(socket)->second;
@@ -347,12 +356,12 @@ int __wrap_bind(int socket, const struct sockaddr* address, socklen_t address_le
     port = addr->sin_port;
     auto dev = pool.findDevice(ip);
     if (dev == NULL) {
-        my_printf("[BIND]: IP address is invalid\n");
+        printf("[BIND]: IP address is invalid\n");
         return -1;
     }
     dev->mutex_port.lock();
     if (!dev->free_port[port]) {
-        my_printf("[BIND]: Port is occupied\n");
+        printf("[BIND]: Port is occupied\n");
         dev->mutex_port.unlock();
         return -1;
     }
@@ -378,13 +387,13 @@ int __real_listen(int socket, int backlog);
 int __wrap_listen(int socket, int backlog) {
     try {
         if (bind_manager.bind_list.find(socket) == bind_manager.bind_list.end()) {
-            my_printf("[LISTEN]: Socket not allocated\n");
+            printf("[LISTEN]: Socket not allocated\n");
             return -1;
         }
         bind_manager.bind_list[socket].is_listening = 1;
         sockaddr_in& sockaddr = bind_manager.bind_list[socket].addr;
         if (sockaddr.sin_port == 0) {
-            my_printf("[LISTEN]: Socket information is not compeleted\n");
+            printf("[LISTEN]: Socket information is not compeleted\n");
             return -1;
         }
         listen_maganer.mutex.lock();
@@ -395,7 +404,7 @@ int __wrap_listen(int socket, int backlog) {
         listen_maganer.mutex.unlock();
         my_printf("[LISTEN] Socket %d start listening", socket);
     } catch (const char* err) {
-        my_printf("[LISTEN] Error: %s\n", err);
+        printf("[LISTEN] Error: %s\n", err);
         return -1;
     }
     return 0;
@@ -426,7 +435,7 @@ int __wrap_accept(int socket, struct sockaddr* address, socklen_t* address_len) 
                 while (1) {
                     handleSYN(req, item.sockaddr);
                     if (cv_estab.wait_for(lk, std::chrono::seconds(1), [&] { return socket_status.find(req.conn_fd)->second == ESTAB;})) {
-                        my_printf("[ACCEPT] Accept successfully!\n");
+                        my_printf("[ACCEPT] Accept %d successfully!\n", req.conn_fd);
                         break;
                     }
                 }
@@ -434,18 +443,18 @@ int __wrap_accept(int socket, struct sockaddr* address, socklen_t* address_len) 
                     memcpy(address, &bind_manager.bind_list[req.conn_fd].addr, sizeof(sockaddr_in));
                     *address_len = sizeof(sockaddr_in);
                 }
-                return 0;
+                return req.conn_fd;
             }
         }
     }
-    my_printf("[ACCEPT] Error: socket %d is not listening! \n", socket);
+    printf("[ACCEPT] Error: socket %d is not listening! \n", socket);
     return -1;
 }
 
 int __real_connect(int socket, const struct sockaddr* address, socklen_t address_len);
 int __wrap_connect(int socket, const struct sockaddr* address, socklen_t address_len) {
     if(bind_manager.bind_list.find(socket) == bind_manager.bind_list.end()) {
-        my_printf("[CONNECT] Socket %d has not bind\n", socket);
+        printf("[CONNECT] Socket %d has not bind\n", socket);
         return -1;
     }
     in_addr target_ip = ((sockaddr_in*)address)->sin_addr;
@@ -458,13 +467,13 @@ int __wrap_connect(int socket, const struct sockaddr* address, socklen_t address
             }
         }
         if (src_addr_in.sin_addr.s_addr == 0) {
-            my_printf("[CONNECT] Error: Target IP isn't in route table!\n");
+            printf("[CONNECT] Error: Target IP isn't in route table!\n");
             return -1;
         }
     }
     Device* dev = pool.findDevice(src_addr_in.sin_addr);
     if (dev == NULL) {
-        my_printf("[CONNECT] Error: IP address!\n");
+        printf("[CONNECT] Error: IP address!\n");
         return -1;
     }
     if (src_addr_in.sin_port == 0) {
@@ -498,7 +507,7 @@ int __wrap_connect(int socket, const struct sockaddr* address, socklen_t address
 ssize_t __real_write(int fildes, const void* buf, size_t nbyte);
 ssize_t __wrap_write(int fildes, const void* buf, size_t nbyte) {
     if (socket_status.find(fildes)->second != ESTAB) {
-        my_printf("[WRITE] Error: Connection has not been estabished!\n");
+        printf("[WRITE] Error: Connection has not been estabished!\n");
         return 0;
     }
     SocketInfo& socket_info = bind_manager.bind_list.find(fildes)->second;
@@ -520,24 +529,27 @@ ssize_t __wrap_write(int fildes, const void* buf, size_t nbyte) {
             return 0;
         }
     }
+    my_printf("[WRITE] write done %d bytes\n", (int)nbyte);
     return nbyte;
 }
 
 ssize_t __real_read(int fildes, void* buf, size_t nbyte);
 ssize_t __wrap_read(int fildes, void* buf, size_t nbyte) {
     auto pr = bind_manager.bind_list.find(fildes);
-    if (pr != bind_manager.bind_list.end()) {
+    if (pr == bind_manager.bind_list.end()) {
         my_printf("[READ] Error: Connection has not been estabished!\n");
         return 0;
     }
     SocketInfo& socket_info = pr->second;
     std::unique_lock<std::mutex> lk(read_mutex);
-    cv_read.wait(lk, [&] { return socket_info.buffer.size() >= nbyte; });
-    for (int i = 0; i < (int)nbyte; ++i) {
+    my_printf("[READ] bufsize=%d needbytes=%d\n", (int)socket_info.buffer.size(), (int)nbyte);
+    cv_read.wait_for(lk, std::chrono::seconds(5), [&] { return socket_info.buffer.size() > 0; });
+    int lim = (int)std::min(socket_info.buffer.size(), nbyte);
+    for (int i = 0; i < lim; ++i) {
         ((u_char*)buf)[i] = socket_info.buffer[0];
         socket_info.buffer.erase(socket_info.buffer.begin());
     }
-    return nbyte;
+    return lim;
 }
 
 int __real_close(int fildes);
@@ -546,20 +558,32 @@ int __wrap_close(int fildes) {
         my_printf("[CLOSE] Error: Connection has not been estabished!\n");
         return 0;
     }
+    printf("[CLOSE] Sokcet %d start closing\n", fildes);
     if(socket_status.find(fildes)->second == ESTAB)
         update_status(fildes, FIN_WAIT_1);
     sendFIN(fildes);
     std::unique_lock<std::mutex> lk(fin_mutex);
     for (int i = 0; i < MAX_TCP_RETRY_NUM; ++i) {
         if (cv_close.wait_for(lk, std::chrono::seconds(1), [&] { 
-            return socket_status.find(fildes)->second == FIN_WAIT_2 || socket_status.find(fildes)->second == CLOSING; })) {
+            return socket_status[fildes] == FIN_WAIT_2 || socket_status[fildes]== CLOSE_WAIT; })) {
             break;
         }
         sendFIN(fildes);
     }
-    cv_close.wait(lk, [&] { return socket_status.find(fildes)->second == TIME_WAIT; });
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    if (socket_status[fildes] == FIN_WAIT_2) {
+        printf("[CLOSE] Sokcet %d wait to be TIME_WAIT, Status now is %d\n", fildes, socket_status.find(fildes)->second);
+        cv_close.wait(lk, [&] { return socket_status.find(fildes)->second == TIME_WAIT; });
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+    else {
+        for (int i = 0; i < MAX_TCP_RETRY_NUM; ++i) {
+            sendFIN(fildes);
+            if (cv_close.wait_for(lk, std::chrono::seconds(1), [&] { return socket_status[fildes] == CLOSED; }))
+                break;
+        }
+    }
     freeSocket(fildes);
+    printf("[CLOSE] Sokcet %d closed\n", fildes);
     return 0;
 }
 

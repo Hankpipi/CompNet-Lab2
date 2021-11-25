@@ -30,6 +30,7 @@ void str_cli(FILE *fp, int sockfd, int sleep_) {
   char sendline[MAXLINE];
   char recvline[MAXLINE];
   while (fgets(sendline, MAXLINE, fp) != NULL) {
+    printf("[echo_client] send len = %d\n", strlen(sendline));
     writen(sockfd, sendline, strlen(sendline));
     if (sleep_) sleep(1);
 
@@ -52,9 +53,7 @@ void cli_client(const char* addr, int sleep_) {
   servaddr.sin_family = AF_INET;
   servaddr.sin_port = htons(10086);
   Inet_pton(AF_INET, addr, &servaddr.sin_addr);
-  puts("[echo_client] socket successfully");
   Connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
-  printf("[echo_client] connect %d successfully\n", sockfd);
   populate_buf();
   
   fp = fmemopen(message_buf, MSG_LEN, "r");

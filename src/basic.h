@@ -28,11 +28,25 @@
 #include <map>
 #include <set>
 
-// #define DEBUG
-#ifdef DEBUG
+// #define DEBUG_TCP
+#ifdef DEBUG_TCP
 #define my_printf printf
 #else
 #define my_printf(...)
+#endif
+
+// #define DEBUG_IP
+#ifdef DEBUG_IP
+#define IP_printf printf
+#else
+#define IP_printf(...)
+#endif
+
+// #define DEBUG_LINK
+#ifdef DEBUG_LINK
+#define LK_printf printf
+#else
+#define LK_printf(...)
 #endif
 
 #define MAX_ARP_WATING_TIME 5

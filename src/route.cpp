@@ -36,15 +36,15 @@ void UpdateTalble() {
 }
 
 void Router::printTable() {
-    printf("[Print Routing Table]\n");
-    printf("\033[34m[Table]\033[0m\n");
-    printf("_____________________________________________________________________________________________________\n");
-    printf("||%18s||%18s||%18s||%18s||%18s||\n", "ip_prefix", "subnetMask", "send_by", "next_hop", "dist");
+    IP_printf("[Print Routing Table]\n");
+    IP_printf("\033[34m[Table]\033[0m\n");
+    IP_printf("_____________________________________________________________________________________________________\n");
+    IP_printf("||%18s||%18s||%18s||%18s||%18s||\n", "ip_prefix", "subnetMask", "send_by", "next_hop", "dist");
     for (auto& item : routetable) {
-        printf("||%18s||%18s||%18s||%18s||%18d||\n", IPtoStr(item.ip_prefix), IPtoStr(item.subnetMask),
+        IP_printf("||%18s||%18s||%18s||%18s||%18d||\n", IPtoStr(item.ip_prefix), IPtoStr(item.subnetMask),
             item.dev->mac, item.next_hop, item.dist);
     }
-    printf("=====================================================================================================\n"); 
+    IP_printf("=====================================================================================================\n"); 
 }
 
 void Router::check() {
@@ -54,7 +54,7 @@ void Router::check() {
 }
 
 void Router::InsertLocalIP(DevicePool& pool) {
-    my_printf("[InsertLocalIP]......\n");
+    IP_printf("[InsertLocalIP]......\n");
     for (auto& dev : pool.device_list) {
         in_addr tmp_ip_prefix, tmp_mask;
         tmp_ip_prefix.s_addr = dev->ip.s_addr & dev->subnetMask.s_addr;
@@ -64,7 +64,7 @@ void Router::InsertLocalIP(DevicePool& pool) {
 }
 
 void Router::initializeTable(DevicePool& pool) {
-    my_printf("[initializeTable]\n");
+    IP_printf("[initializeTable]\n");
     this->InsertLocalIP(pool);
     t = std::thread(UpdateTalble);
 }
@@ -81,11 +81,11 @@ u_char* Router::GetNexthop(const in_addr& dstIP) {
 void broadcastRouteTable(const Device* dev) {
     while (1) {
         table_mutex.lock();
-        my_printf("[broadcastRouteTable Function]: ...\n");
+        IP_printf("[broadcastRouteTable Function]: ...\n");
         int size = router.routetable.size();
         int packet_size = sizeof(TablePacket);
         int total_size = size * packet_size;
-        my_printf("[broadcastRouteTable Function] [table_size: %d]\n", size);
+        IP_printf("[broadcastRouteTable Function] [table_size: %d]\n", size);
         u_char content[total_size];
         auto it = router.routetable.begin();
         for (int i = 0; i < size; ++i, ++it) {
@@ -105,7 +105,7 @@ void broadcastRouteTable(const Device* dev) {
 void Router::InsertTable(const in_addr ip_prefix, const in_addr mask,
     const u_char* nextHop, Device* dev, const int dist) {
     if(dist >= 10) {
-        my_printf("[InsertTable] drop RouteItem whose dist >= 10\n");
+        IP_printf("[InsertTable] drop RouteItem whose dist >= 10\n");
         return ;
     }
     bool is_find = 0;
@@ -115,7 +115,7 @@ void Router::InsertTable(const in_addr ip_prefix, const in_addr mask,
             if (it->dist >= dist) {
                 routetable.erase(it);
                 routetable.insert(RouterItem(ip_prefix, mask, dev, nextHop, dist));
-                my_printf("[handleReceiveRouteTable] Insert [ip_prefix=%s] [mask=%s]\n", 
+                IP_printf("[handleReceiveRouteTable] Insert [ip_prefix=%s] [mask=%s]\n", 
                         IPtoStr(ip_prefix), IPtoStr(mask));
                 break;
             }
@@ -123,13 +123,13 @@ void Router::InsertTable(const in_addr ip_prefix, const in_addr mask,
     }
     if (!is_find) {
         routetable.insert(RouterItem(ip_prefix, mask, dev, nextHop, dist));
-        my_printf("[handleReceiveRouteTable] Insert [ip_prefix=%s] [mask=%s]\n", 
+        IP_printf("[handleReceiveRouteTable] Insert [ip_prefix=%s] [mask=%s]\n", 
                 IPtoStr(ip_prefix), IPtoStr(mask));
     }
 }
 
 void Router::handleReceiveRouteTable(const u_char* srcMac, const u_char* content, const int len, Device* dev) {
-    my_printf("[handleReceiveRouteTable] Start\n");
+    IP_printf("[handleReceiveRouteTable] Start\n");
     assert(len % sizeof(TablePacket) == 0);
     int single_size = sizeof(TablePacket);
     int cnt = len / single_size;
@@ -144,7 +144,7 @@ void Router::handleReceiveRouteTable(const u_char* srcMac, const u_char* content
                             srcMac, dev, neighbor_table[i].dist);
     }
     table_mutex.unlock();
-    my_printf("[handleReceiveRouteTable] Done\n");
+    IP_printf("[handleReceiveRouteTable] Done\n");
 }
 
 Device* DevicePool::findDevice(in_addr src, in_addr dst) {

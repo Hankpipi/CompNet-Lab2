@@ -61,31 +61,31 @@ int myIPCallback(const void* buf, const int len) {
         pkt.header = *(ip*)buf;
         int header_len = sizeof(ip);
         if (Checksum(&pkt.header, header_len) != 0) {
-            my_printf("[IPCallback] [Checksum error]\n");
+            IP_printf("[IPCallback] [Checksum error]\n");
             return -1;
         }
-        my_printf("[IPCallback] [Checksum success]\n");
+        IP_printf("[IPCallback] [Checksum success]\n");
         pkt.RecoverOrder();
         pkt.payload = (u_char*)buf + header_len;
 
-        my_printf("[IPCallback] [srcIP: %s] [dstIP: %s] [len: %d]\n",
+        IP_printf("[IPCallback] [srcIP: %s] [dstIP: %s] [len: %d]\n",
             IPtoStr(pkt.header.ip_src), IPtoStr(pkt.header.ip_dst), len);
-        my_printf("[IPCallback] [received an IP packet]:\n");
+        IP_printf("[IPCallback] [received an IP packet]:\n");
         for (int i = 0; i < len - header_len; ++i) {
-            my_printf("%02x ", pkt.payload[i]);
+            IP_printf("%02x ", pkt.payload[i]);
         }
-        my_printf("\n");
+        IP_printf("\n");
         if (IsArrive(pkt.header.ip_dst)) {
-            my_printf("[IPCallback] Successfully receive IPpacket to me!\n");
+            IP_printf("[IPCallback] Successfully receive IPpacket to me!\n");
             if (pkt.header.ip_p == IPPROTO_TCP) 
                 TCP_handler(pkt, len - header_len);
             
         } else {
-            my_printf("[IPCallback] [Forwarding]\n");
+            IP_printf("[IPCallback] [Forwarding]\n");
             sendIPPacket(pool, pkt.header.ip_src, pkt.header.ip_dst, pkt.header.ip_p, pkt.payload, len - header_len);
         }
     } catch (const char* err) {
-        my_printf("[IPCallback] error: %s", err);
+        IP_printf("[IPCallback] error: %s", err);
         return -1;
     }
     return 0;
@@ -103,27 +103,27 @@ bool IsArrive(in_addr addr) {
 
 int sendIPPacket(DevicePool& pool, const struct in_addr src, const struct in_addr dest,
     int proto, const void* buf, int len) {
-    my_printf("[sendIPPacket] [srcIP: %s] [dstIP: %s]\n", IPtoStr(src), IPtoStr(dest));
+    IP_printf("[sendIPPacket] [srcIP: %s] [dstIP: %s]\n", IPtoStr(src), IPtoStr(dest));
     Device* dev = pool.findDevice(src, dest);
     if (!dev) {
-        my_printf("[sendIPPacket] No suitable device to send this IP packet\n");
+        IP_printf("[sendIPPacket] No suitable device to send this IP packet\n");
         return -1;
     }
     char* dstMAC;
     if (IsSameSubnet(dev->ip, dest, dev->subnetMask)) {
-        my_printf("[sendIPPacket] [srcIP: %s] [dstIP: %s] in same subnet\n",
+        IP_printf("[sendIPPacket] [srcIP: %s] [dstIP: %s] in same subnet\n",
             IPtoStr(dev->ip), IPtoStr(dest));
         try {
             dstMAC = ARPFindMAC(dev, dest);
         } catch (const char* err) {
-            my_printf("[sendIPPacket] to [IP=%s] err: %s\n", inet_ntoa(dest), err);
+            IP_printf("[sendIPPacket] to [IP=%s] err: %s\n", inet_ntoa(dest), err);
             return -1;
         }
     } else {
         try {
             dstMAC = (char*)router.GetNexthop(dest);
         } catch (const char* e) {
-            my_printf("[sendIPPacket] to [IP=%s] err: %s\n", inet_ntoa(dest), e);
+            IP_printf("[sendIPPacket] to [IP=%s] err: %s\n", inet_ntoa(dest), e);
             return -1;
         }
     }
@@ -146,11 +146,11 @@ int sendIPPacket(DevicePool& pool, const struct in_addr src, const struct in_add
 }
 
 int setIPPacketReceiveCallback(IPPacketReceiveCallback callback) {
-    my_printf("[setIPPacketReceiveCallback]......\n");
+    IP_printf("[setIPPacketReceiveCallback]......\n");
     try {
         IPCallback = callback;
     } catch (const char* err) {
-        my_printf("[setIPPacketReceiveCallback] error: %s\n", err);
+        IP_printf("[setIPPacketReceiveCallback] error: %s\n", err);
         return -1;
     }
     return 0;

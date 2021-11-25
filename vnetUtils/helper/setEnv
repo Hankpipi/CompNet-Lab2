@@ -1,0 +1,4 @@
+#!/bin/bash
+
+awk -F: '/eth/ {print $1}' /proc/net/dev | xargs -r -i{} ifconfig {} mtu 9126
+cd ../../src
