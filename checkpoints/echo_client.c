@@ -30,7 +30,6 @@ void str_cli(FILE *fp, int sockfd, int sleep_) {
   char sendline[MAXLINE];
   char recvline[MAXLINE];
   while (fgets(sendline, MAXLINE, fp) != NULL) {
-    printf("[echo_client] send len = %d\n", strlen(sendline));
     writen(sockfd, sendline, strlen(sendline));
     if (sleep_) sleep(1);
 

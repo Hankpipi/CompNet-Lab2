@@ -11,7 +11,6 @@ void str_echo(int sockfd, int sleep_) {
   size_t acc = 0;
   again:
   while ((n = read(sockfd, buf, MAXLINE)) > 0) {
-    printf("[echo_server] read len = %d\n", n);
     writen(sockfd, buf, n);
     acc += n;
     printf("%zu ", acc);
