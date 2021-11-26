@@ -57,6 +57,7 @@
 #define SOCKET_MIN  0
 #define SOCKET_MAX 2147483647
 #define MAX_TCP_RETRY_NUM 8
+#define MAX_WRITE_SIZE 10000
 
 typedef int (*frameReceiveCallback)( const void *, int , int );
 typedef int (*IPPacketReceiveCallback)(const void* , int);

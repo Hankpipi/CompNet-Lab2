@@ -115,6 +115,7 @@ struct ListenItem {
 struct SocketInfo {
     int seq;
     int start_seq;
+    int pair_start_seq;
     int pair_seq;
     int last_len;
     bool waiting_ack;
@@ -123,12 +124,12 @@ struct SocketInfo {
     sockaddr_in pair_addr;
     std::vector<u_char> buffer;
     SocketInfo() {
-        pair_seq = -1;
+        pair_seq = pair_start_seq = -1;
         last_len = waiting_ack = is_listening = 0;
         addr.sin_addr.s_addr = 0;
         addr.sin_port = 0;
-        seq = start_seq = rand() % 65536;
-        seq += 1;
+        start_seq = rand() % 65536;
+        seq = start_seq + 1;
     };
 };
 

@@ -22,7 +22,11 @@ void pcap_callback(Device* dev, const struct pcap_pkthdr* packet_header, const u
     LK_printf("[pcap_callback][device's mac address = %s][frame's destmac = %s][frame's srcmac = %s][ether_type = %d]\n", 
             dev->mac, dst, src, header->ether_type);
     if (strcmp((char*)dst, (char*)dev->mac) != 0 && strcmp((char*)dst, "ff:ff:ff:ff:ff:ff") != 0) {
-        LK_printf("drop useless packet: frame's destmac address doesn't match\n\n");
+        LK_printf("[pcap_callback] drop useless packet: frame's destmac address doesn't match\n\n");
+        return;
+    }
+    if (strcmp((char*)src, (char*)dev->mac) == 0) {
+        LK_printf("[pcap_callback] drop packet send by myself\n\n");
         return;
     }
     if (header->ether_type == ETHERTYPE_ARP) {
