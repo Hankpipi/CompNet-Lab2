@@ -1,5 +1,6 @@
 #include "basic.h"
 
+IPPacketReceiveCallback IPCallback;
 void StrToMac(const u_char* mac, u_char* dst) {
     int tmp[6];
     sscanf((char*)mac, "%02X:%02X:%02X:%02X:%02X:%02X", 

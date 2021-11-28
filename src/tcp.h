@@ -75,8 +75,7 @@
 #define FIN_WAIT_2 6
 #define CLOSE_WAIT 7
 #define LAST_ACK 8
-#define CLOSING 9
-#define TIME_WAIT 10
+#define TIME_WAIT 9
 
 extern std::mutex status_mutex;
 extern std::mutex ack_mutex;

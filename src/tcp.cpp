@@ -34,10 +34,6 @@ TCPInitailizer::TCPInitailizer() {
 }
 struct TCPInitailizer TCPinitailizer;
 
-bool compHeader(tcphdr& hdr1, tcphdr& hdr2) {
-    return hdr1.th_seq == hdr2.th_seq && hdr1.th_sport == hdr2.th_sport;
-}
-
 int update_status(int socket, int status) {
     status_mutex.lock();
     if (socket_status.find(socket) == socket_status.end()) {
@@ -243,8 +239,8 @@ int TCP_handler(IPpacket& pkt, int len) {
         for (auto& item : listen_maganer.listen_items) {
             if (item.sockaddr->sin_addr.s_addr == pkt.header.ip_dst.s_addr && (item.sockaddr->sin_port == header.th_dport)) {
                 for(auto& sock : alloc_socket) {
-                    if (socket_status[sock] != LISTEN && bind_manager.bind_list[sock].pair_start_seq == header.th_seq) {
-                        printf("[TCP Handler] Drop useless SYN packet: connection has been established\n");
+                    if (socket_status[sock] != LISTEN && bind_manager.bind_list[sock].pair_start_seq == (int)header.th_seq) {
+                        my_printf("[TCP Handler] Drop useless SYN packet: connection has been established\n");
                         listen_maganer.mutex.unlock();
                         return -1;
                     }
@@ -557,7 +553,7 @@ ssize_t __wrap_read(int fildes, void* buf, size_t nbyte) {
     SocketInfo& socket_info = pr->second;
     std::unique_lock<std::mutex> lk(read_mutex);
     my_printf("[READ] bufsize=%d needbytes=%d\n", (int)socket_info.buffer.size(), (int)nbyte);
-    cv_read.wait_for(lk, std::chrono::seconds(5), [&] { return socket_info.buffer.size() > 0; });
+    cv_read.wait_for(lk, std::chrono::seconds(8), [&] { return socket_info.buffer.size() > 0; });
     int lim = (int)std::min(socket_info.buffer.size(), nbyte);
     for (int i = 0; i < lim; ++i) {
         ((u_char*)buf)[i] = socket_info.buffer[0];
@@ -573,13 +569,15 @@ int __wrap_close(int fildes) {
         return 0;
     }
     my_printf("[CLOSE] Sokcet %d start closing\n", fildes);
-    if(socket_status.find(fildes)->second == ESTAB)
+    if (socket_status[fildes] == ESTAB)
         update_status(fildes, FIN_WAIT_1);
+    else if (socket_status[fildes] == CLOSE_WAIT)
+        update_status(fildes, LAST_ACK);
     sendFIN(fildes);
     std::unique_lock<std::mutex> lk(fin_mutex);
     for (int i = 0; i < MAX_TCP_RETRY_NUM; ++i) {
         if (cv_close.wait_for(lk, std::chrono::seconds(1), [&] { 
-            return socket_status[fildes] == FIN_WAIT_2 || socket_status[fildes]== CLOSE_WAIT; })) {
+            return socket_status[fildes] == FIN_WAIT_2 || socket_status[fildes]== LAST_ACK; })) {
             break;
         }
         sendFIN(fildes);

@@ -1,7 +1,6 @@
 #include "ip.h"
 #include "tcp.h"
 
-IPPacketReceiveCallback IPCallback;
 
 void IPpacket::ToNetOrder() {
     header.ip_len = htons(header.ip_len);
