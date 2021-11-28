@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <unistd.h>
@@ -58,6 +59,7 @@
 #define SOCKET_MAX 2147483647
 #define MAX_TCP_RETRY_NUM 8
 #define MAX_WRITE_SIZE 10000
+#define MAX_BUFFER_SIZE 20000
 
 typedef int (*frameReceiveCallback)( const void *, int , int );
 typedef int (*IPPacketReceiveCallback)(const void* , int);

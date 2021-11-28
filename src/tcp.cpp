@@ -324,14 +324,19 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
             return -1;
         }
         size_t ip_header_len = sizeof(ip);
+        auto& socket_info = bind_manager.bind_list.find(socket)->second;
+        int content_len = len - (int)ip_header_len;
+        if (content_len + (int)socket_info.buffer.size() > MAX_BUFFER_SIZE) {
+            printf("[INFO] Buffer is full\n");
+            sendACK(socket);
+            return 0;
+        }
         bind_manager.bind_list.find(socket)->second.pair_seq += len - (int)ip_header_len;
         my_printf("[statusForward] Receive successfully seq=%d\n", header.th_seq);
         std::unique_lock<std::mutex> lk(read_mutex);
         u_char* content = (u_char*)pkt.payload + ip_header_len;
-        auto& socket_info = bind_manager.bind_list.find(socket)->second;
-        for (int i = 0; i < len - (int)ip_header_len; ++i) {
+        for (int i = 0; i < content_len; ++i)
             socket_info.buffer.push_back(content[i]);
-        }
         lk.unlock();
         cv_read.notify_all();
         sendACK(socket);
@@ -603,18 +608,18 @@ int __real_getaddrinfo(const char* node, const char* service,
     const struct addrinfo* hints, struct addrinfo** res);
 int __wrap_getaddrinfo(const char* node, const char* service,
     const struct addrinfo* hints, struct addrinfo** res) {
-    // if (hints->ai_family == AF_INET && hints->ai_protocol == IPPROTO_TCP && hints->ai_socktype == SOCK_STREAM) {
-    //     addrinfo* head = new addrinfo;
-    //     *res = head;
-    //     head->ai_next = NULL;
-    //     sockaddr_in* tmp = new sockaddr_in;
-    //     inet_pton(AF_INET, node, &tmp->sin_addr.s_addr);
-    //     tmp->sin_addr.s_addr = htonl(tmp->sin_addr.s_addr);
-    //     tmp->sin_port = htons(atoi(service));
-    //     head->ai_addr = (sockaddr*)(tmp);
-    //     head->ai_addrlen = sizeof(sockaddr_in);
-    //     return 0;
-    // }
+    if (hints->ai_protocol == IPPROTO_TCP && hints->ai_socktype == SOCK_STREAM) {
+        addrinfo* head = new addrinfo;
+        sockaddr_in* ret = new sockaddr_in;
+        *res = head;
+        head->ai_next = NULL;
+        inet_pton(AF_INET, node, &ret->sin_addr.s_addr);
+        ret->sin_addr.s_addr = htonl(ret->sin_addr.s_addr);
+        ret->sin_port = htons(atoi(service));
+        head->ai_addr = (sockaddr*)(ret);
+        head->ai_addrlen = sizeof(sockaddr_in);
+        return 0;
+    }
     return -1;
 }
 }

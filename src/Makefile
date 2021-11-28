@@ -27,6 +27,12 @@ perf_client:
 perf_server:
 	$(CC) ../checkpoints/perf_server.c ../checkpoints/unp.c basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp tcp.cpp ${LDFLAGS} -o $@
 
+flow_client:
+	$(CC) test_flow_control_client.cpp ../checkpoints/unp.c basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp tcp.cpp ${LDFLAGS} -o $@
+
+flow_server:
+	$(CC) test_flow_control_server.cpp ../checkpoints/unp.c basic.cpp device.cpp packetio.cpp route.cpp ip.cpp arp.cpp tcp.cpp ${LDFLAGS} -o $@
+
 parta:
 	$(CC) parta_checkpoints.cpp basic.cpp device.cpp packetio.cpp ${LDFLAGS} -o $@
 
@@ -43,5 +49,5 @@ prefix:
 	$(CC) test_longest_prefix.cpp basic.cpp device.cpp packetio.cpp route.cpp arp.cpp ${LDFLAGS} -o $@
 
 clean:
-	rm -rf parta arp listen route prefix echo_client echo_server perf_client perf_server
+	rm -rf parta arp listen route prefix echo_client echo_server perf_client perf_server flow_client flow_server
  
