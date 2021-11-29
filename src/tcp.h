@@ -118,13 +118,14 @@ struct SocketInfo {
     int pair_seq;
     int last_len;
     bool waiting_ack;
+    bool buffer_full;
     bool is_listening;
     sockaddr_in addr;
     sockaddr_in pair_addr;
     std::vector<u_char> buffer;
     SocketInfo() {
         pair_seq = pair_start_seq = -1;
-        last_len = waiting_ack = is_listening = 0;
+        last_len = waiting_ack = is_listening = buffer_full = 0;
         addr.sin_addr.s_addr = 0;
         addr.sin_port = 0;
         start_seq = rand() % 65536;
@@ -145,14 +146,14 @@ struct ListenManager {
 
 int TCP_handler(IPpacket&, int);
 int statusForward(int, IPpacket&, int, tcphdr&);
-
+int handleWrite(int, IPpacket&, int, tcphdr&);
 void handleSYN(ConnRequest&, sockaddr_in*);
 void handle_SYN_ACK(int, IPpacket&, tcphdr&);
 int sendWrite(int, size_t, const void*);
 
 void sendFIN(int);
 void send_FINACK(int);
-void sendACK(int);
+void sendACK(int, int, bool);
 
 void freeSocket(int);
 

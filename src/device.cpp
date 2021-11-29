@@ -74,11 +74,6 @@ Device::Device(int _id, const char* _name) {
         throw "pcap_create failed!";
         return ;
     }
-    // if((pcap_set_buffer_size(_pcap, 100)) != 0) {
-    //     LK_printf("ERROR\n");
-    //     throw "pcap_set_buffer_size failed!";
-    //     return ;
-    //}
     if(pcap_activate(_pcap) != 0) {
         errbuf = pcap_geterr(_pcap);
         LK_printf("pcap_activate error: %s\n", errbuf);

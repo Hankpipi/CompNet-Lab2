@@ -137,15 +137,16 @@ void send_FINACK(int fd) {
     sendIPPacket(pool, socket_info.addr.sin_addr, socket_info.pair_addr.sin_addr, IPPROTO_TCP, &header, sizeof(header));
 }
 
-void sendACK(int fd) {
+void sendACK(int fd, int ack, bool full) {
     SocketInfo socket_info = bind_manager.bind_list.find(fd)->second;
     tcphdr header;
     memset(&header, 0, sizeof(header));
     header.th_seq = socket_info.seq;
-    header.th_ack = socket_info.pair_seq;
+    header.th_ack = ack;
     header.th_sport = socket_info.addr.sin_port;
     header.th_dport = socket_info.pair_addr.sin_port;
     header.th_flags = TH_ACK;
+    if(full)header.th_flags |= TH_FULL;
     header.th_win = 65535;
     my_printf("[sendACK] send ack=%d\n", header.th_ack);
     TCPToNet(header);
@@ -255,10 +256,37 @@ int TCP_handler(IPpacket& pkt, int len) {
         return -1;
     }
     if(socket < 0) {
-        printf("[TCP Handler] Error: socket not find!\n");
+        my_printf("[TCP Handler] Error: socket not find!\n");
         return -1;
     }
     statusForward(socket, pkt, len, header);
+    return 0;
+}
+
+int handleWrite(int socket, IPpacket& pkt, int len, tcphdr& header) {
+    if (bind_manager.bind_list.find(socket)->second.pair_seq > (int)header.th_seq) {
+        my_printf("[handleWrite] Error seq: expected seq=%d, but get seq=%d\n", 
+                bind_manager.bind_list.find(socket)->second.pair_seq, header.th_seq);
+        return -1;
+    }
+    size_t ip_header_len = sizeof(ip);
+    auto& socket_info = bind_manager.bind_list.find(socket)->second;
+    int content_len = len - (int)ip_header_len;
+    int seq = bind_manager.bind_list.find(socket)->second.pair_seq;
+    std::unique_lock<std::mutex> lk(read_mutex);
+    if (content_len + (int)socket_info.buffer.size() > MAX_BUFFER_SIZE) {
+        sendACK(socket, seq + len - (int)ip_header_len, 1);
+        printf("[handleWrite] Buffer is full\n");
+        return 0;
+    }
+    bind_manager.bind_list.find(socket)->second.pair_seq += len - (int)ip_header_len;
+    my_printf("[handleWrite] Receive successfully seq=%d\n", header.th_seq);
+    u_char* content = (u_char*)pkt.payload + ip_header_len;
+    for (int i = 0; i < content_len; ++i)
+        socket_info.buffer.push_back(content[i]);
+    lk.unlock();
+    cv_read.notify_all();
+    sendACK(socket, bind_manager.bind_list.find(socket)->second.pair_seq, 0);
     return 0;
 }
 
@@ -296,8 +324,11 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
             return -1;
         }
         my_printf("[statusForward] ACK success: ack=%d\n", header.th_ack);
-        bind_manager.bind_list.find(socket)->second.last_len = 0;
-        bind_manager.bind_list.find(socket)->second.seq = (int)header.th_ack;
+        bind_manager.bind_list.find(socket)->second.buffer_full = header.th_flags & TH_FULL;
+        if((header.th_flags & TH_FULL) == 0) {
+            bind_manager.bind_list.find(socket)->second.last_len = 0;
+            bind_manager.bind_list.find(socket)->second.seq = (int)header.th_ack;
+        }
         bind_manager.bind_list.find(socket)->second.waiting_ack = 0;
         lk.unlock();
         cv_estab.notify_all();
@@ -317,31 +348,8 @@ int statusForward(int socket, IPpacket& pkt, int len, tcphdr& header) {
         }
         return 0;
     }
-    if (status == ESTAB || status == FIN_WAIT_1 || status == FIN_WAIT_2) {
-        if (bind_manager.bind_list.find(socket)->second.pair_seq > (int)header.th_seq) {
-            my_printf("[statusForward] Error seq: expected seq=%d, but get seq=%d\n", 
-                    bind_manager.bind_list.find(socket)->second.pair_seq, header.th_seq);
-            return -1;
-        }
-        size_t ip_header_len = sizeof(ip);
-        auto& socket_info = bind_manager.bind_list.find(socket)->second;
-        int content_len = len - (int)ip_header_len;
-        if (content_len + (int)socket_info.buffer.size() > MAX_BUFFER_SIZE) {
-            printf("[INFO] Buffer is full\n");
-            sendACK(socket);
-            return 0;
-        }
-        bind_manager.bind_list.find(socket)->second.pair_seq += len - (int)ip_header_len;
-        my_printf("[statusForward] Receive successfully seq=%d\n", header.th_seq);
-        std::unique_lock<std::mutex> lk(read_mutex);
-        u_char* content = (u_char*)pkt.payload + ip_header_len;
-        for (int i = 0; i < content_len; ++i)
-            socket_info.buffer.push_back(content[i]);
-        lk.unlock();
-        cv_read.notify_all();
-        sendACK(socket);
-        return 0;
-    }
+    if (status == ESTAB || status == FIN_WAIT_1 || status == FIN_WAIT_2)
+        return handleWrite(socket, pkt, len, header);
     return -1;
 }
 extern "C" {
@@ -526,16 +534,22 @@ ssize_t __wrap_write(int fildes, const void* buf, size_t nbyte) {
     }
     SocketInfo& socket_info = bind_manager.bind_list.find(fildes)->second;
     int lim = std::min((int)nbyte, MAX_WRITE_SIZE);
-    sendWrite(fildes, lim, buf);
     socket_info.waiting_ack = 1;
     std::unique_lock<std::mutex> lk(ack_mutex);
     int retry = 0;
     while (1) {
-        if (cv_estab.wait_for(lk, std::chrono::seconds(3), [&] { return !socket_info.waiting_ack; })) {
-            my_printf("[WRITE] Done!\n");
-            break;
-        }
         sendWrite(fildes, lim, buf);
+        if (cv_estab.wait_for(lk, std::chrono::seconds(5), [&] { return !socket_info.waiting_ack; })) {
+            if (socket_info.buffer_full) {
+                socket_info.waiting_ack = 1;
+                printf("[WRITE] server's buffer is full, sleep 10s\n");
+                cv_estab.wait_for(lk, std::chrono::seconds(10), [&]{return 0; });
+            }
+            else 
+                break;
+        }
+        if (!socket_info.waiting_ack && !socket_info.buffer_full)
+            break;
         retry += 1;
         my_printf("[WRITE] sendWrite retry time %d\n", retry);
         if (retry >= MAX_TCP_RETRY_NUM) {
@@ -558,7 +572,7 @@ ssize_t __wrap_read(int fildes, void* buf, size_t nbyte) {
     SocketInfo& socket_info = pr->second;
     std::unique_lock<std::mutex> lk(read_mutex);
     my_printf("[READ] bufsize=%d needbytes=%d\n", (int)socket_info.buffer.size(), (int)nbyte);
-    cv_read.wait_for(lk, std::chrono::seconds(8), [&] { return socket_info.buffer.size() > 0; });
+    cv_read.wait_for(lk, std::chrono::seconds(10), [&] { return socket_info.buffer.size() > 0; });
     int lim = (int)std::min(socket_info.buffer.size(), nbyte);
     for (int i = 0; i < lim; ++i) {
         ((u_char*)buf)[i] = socket_info.buffer[0];

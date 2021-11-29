@@ -2,7 +2,8 @@
 
 const char* message = "";
 
-#define MSG_LEN 1500000
+#define MSG_LEN 250000
+#define _MAXLINE 10001
 char message_buf[MSG_LEN];
 
 void populate_buf() {
@@ -11,7 +12,7 @@ void populate_buf() {
   memcpy(message_buf, message, message_len);
   i = message_len;
   while (i + 1 < MSG_LEN) {
-    if(i % 9000 == 0)
+    if(i % 10000 == 0 && i != 0)
         message_buf[i] = '\n';
     else
         message_buf[i] = 'a' + (i % 26);
@@ -21,11 +22,12 @@ void populate_buf() {
 }
 
 void str_cli(FILE *fp, int sockfd) {
-  char sendline[MAXLINE];
-  char recvline[MAXLINE];
-  while (fgets(sendline, MAXLINE, fp) != NULL) {
+  char sendline[_MAXLINE];
+  char recvline[_MAXLINE];
+  while (fgets(sendline, _MAXLINE, fp) != NULL) {
     int n = writen(sockfd, sendline, strlen(sendline));
     printf("[Client] Send %d\n", n);
+    fflush(stdout);
   }
 }
 
@@ -46,8 +48,6 @@ void cli_client(const char* addr) {
 
   str_cli(fp, sockfd);
   fclose(fp);
-  
-  close(sockfd);
 }
 
 int main(int argc, char *argv[]) {

@@ -1,31 +1,28 @@
 #include "../checkpoints/unp.h"
 
+#define MAX_READ_LINE 50000
 void str_echo(int sockfd) {
   ssize_t n;
-  char buf[MAXLINE];
+  char buf[MAX_READ_LINE];
   size_t acc = 0;
   again:
-  while ((n = read(sockfd, buf, MAXLINE)) > 0) {
-    writen(sockfd, buf, n);
+  while ((n = read(sockfd, buf, MAX_READ_LINE)) > 0) {
     acc += n;
-    printf("%zu ", acc);
+    printf("[Server] tot_receive %zu\n", acc);
     fflush(stdout);
-    sleep(3);
+    sleep(10);
   }
-  printf("all: %zu\n", acc);
+  printf("[Server] receive done, all: %zu\n", acc);
   if (n < 0 && errno == EINTR) {
     goto again;
   } else if (n < 0) {
     printf("str_echo: read error\n");
   }
-  close(sockfd);
 }
 
 int main(int argc, char *argv[]) {
     struct sockaddr_in cliaddr, servaddr;
     int listenfd = Socket(AF_INET, SOCK_STREAM, 0);
-    int optval;
-    int rv;
     int connfd;
     
     bzero(&servaddr, sizeof(servaddr));
@@ -40,5 +37,5 @@ int main(int argc, char *argv[]) {
     connfd = Accept(listenfd, (struct sockaddr *) &cliaddr, &clilen);
     printf("new connection\n");
     str_echo(connfd);
-  return 0;
+    return 0;
 }

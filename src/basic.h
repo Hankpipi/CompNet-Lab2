@@ -29,7 +29,7 @@
 #include <map>
 #include <set>
 
-// #define DEBUG_TCP
+//#define DEBUG_TCP
 #ifdef DEBUG_TCP
 #define my_printf printf
 #else
@@ -57,9 +57,10 @@
 #define ROUTE_PROTO 0xffff
 #define SOCKET_MIN  0
 #define SOCKET_MAX 2147483647
-#define MAX_TCP_RETRY_NUM 8
-#define MAX_WRITE_SIZE 10000
-#define MAX_BUFFER_SIZE 20000
+#define MAX_TCP_RETRY_NUM 15
+#define MAX_WRITE_SIZE 11000
+#define MAX_BUFFER_SIZE 150000
+#define TH_FULL	0x40
 
 typedef int (*frameReceiveCallback)( const void *, int , int );
 typedef int (*IPPacketReceiveCallback)(const void* , int);
